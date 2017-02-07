@@ -111,3 +111,7 @@ export function fileExists(filename: string): boolean {
 export function addSourcePaths(srcPaths: string[]): void {
   sourcePaths.push(...srcPaths);
 }
+
+export function readSourcePaths(): string[] {
+  return [...sourcePaths];
+}

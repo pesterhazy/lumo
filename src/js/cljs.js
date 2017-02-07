@@ -39,6 +39,7 @@ if (__DEV__) {
       LUMO_LOAD_UPS_DEPS_CLJS: lumo.loadUpstreamForeignLibs,
       LUMO_EXISTS: lumo.fileExists,
       LUMO_EVAL: lumoEval,
+      LUMO_READ_SOURCE_PATHS: readSourcePaths,
       global: undefined,
     };
 
@@ -58,6 +59,7 @@ if (__DEV__) {
     global.LUMO_LOAD_UPS_DEPS_CLJS = lumo.loadUpstreamForeignLibs;
     global.LUMO_EXISTS = lumo.fileExists;
     global.LUMO_EVAL = lumoEval;
+    global.LUMO_READ_SOURCE_PATHS = readSourcePaths;
 
     // $FlowExpectedError: only exists in the custom V8 startup snapshot
     initialize(); // eslint-disable-line no-undef
