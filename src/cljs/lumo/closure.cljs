@@ -31,10 +31,11 @@
 ;; Closure API
 ;; ===========
 
-;; (defmulti js-source-file (fn [_ source] (class source)))
+(defmulti js-source-file (fn [_ source] (type source)))
 
-;; (defmethod js-source-file String [^String name ^String source]
-;;   (SourceFile/fromCode name source))
+(defmethod js-source-file js/String [name source]
+  name
+  #_(SourceFile/fromCode name source))
 
 ;; (defmethod js-source-file File [_ ^File source]
 ;;   (SourceFile/fromFile source))
@@ -1239,7 +1240,7 @@
                               (.appendTo (.getSourceMap closure-compiler) sw name')
                               (.toString sw))]
             (when (true? (:closure-source-map opts))
-              (spit (io/file name') sm-json-str))
+              (fs.writeFileSync name' sm-json-str))
             (emit-optimized-source-map
               ;; TODO: (-> x JSON/parse js->clj)
               (json/read-str sm-json-str :key-fn keyword)
