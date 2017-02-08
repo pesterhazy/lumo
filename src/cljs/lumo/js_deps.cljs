@@ -1,7 +1,8 @@
 (ns lumo.js-deps
   (:require [cljs.tools.reader :as r]
             [clojure.string :as string]
-            [goog.string])
+            [goog.string]
+            [lumo.util :as util])
   (:import [goog.string format]))
 
 (defonce ^:private foreign-libs-index (volatile! {}))

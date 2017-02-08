@@ -1,4 +1,6 @@
-(ns lumo.util)
+(ns lumo.util
+  (:require-macros lumo.util)
+  (:require [clojure.string :as string]))
 
 (defn distinct-by
   ([f coll]
@@ -29,3 +31,14 @@
     (.isDirectory (fs.lstatSync path))
     (catch :default _
       false)))
+
+(defn mkdirs [p]
+  (let [target-dir (-> p path.resolve (path.resolve ".."))]
+    (reduce (fn [acc d]
+              (let [new-path (path.join acc d)]
+                (println "dir" d new-path)
+                (cond-> new-path
+                  (not (fs.existsSync new-path))
+                  fs.mkdirSync)
+                new-path))
+      "/" (rest (string/split target-dir #"/")))))
