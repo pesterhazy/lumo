@@ -35,6 +35,9 @@
            [com.sun.nio.file SensitivityWatchEventModifier]
            [com.google.common.base Throwables]))
 
+(def path (js/require "path"))
+(def fs (js/require "fs"))
+
 (def name-chars (map char (concat (range 48 57) (range 65 90) (range 97 122))))
 
 (defn random-char []
@@ -46,16 +49,16 @@
 ;; Closure API
 ;; ===========
 
-(defmulti js-source-file (fn [_ source] (class source)))
+;; (defmulti js-source-file (fn [_ source] (class source)))
 
-(defmethod js-source-file String [^String name ^String source]
-  (SourceFile/fromCode name source))
+;; (defmethod js-source-file String [^String name ^String source]
+;;   (SourceFile/fromCode name source))
 
-(defmethod js-source-file File [_ ^File source]
-  (SourceFile/fromFile source))
+;; (defmethod js-source-file File [_ ^File source]
+;;   (SourceFile/fromFile source))
 
-(defmethod js-source-file BufferedInputStream [^String name ^BufferedInputStream source]
-  (SourceFile/fromInputStream name source))
+;; (defmethod js-source-file BufferedInputStream [^String name ^BufferedInputStream source]
+;;   (SourceFile/fromInputStream name source))
 
 #_(def check-level
   {:error CheckLevel/ERROR
@@ -298,15 +301,15 @@
   (-foreign? [this] (:foreign this))
   (-closure-lib? [this] (:closure-lib this))
   (-url [this] (or (:url this)
-                   (deps/to-url (:file this))))
-  (-relative-path [this] (let [file (io/as-file (:file this))]
-                           (if (and file (not (.isAbsolute file)))
+                   (:file this)))
+  (-relative-path [this] (let [file (:file this)]
+                           (if (and file (not (path.isAbsolute file)))
                              (:file this))))
   (-provides [this] (map name (:provides this)))
   (-requires [this] (map name (:requires this)))
   (-source [this] (if-let [s (:source this)]
-                    s (with-open [reader (io/reader (deps/-url this))]
-                        (slurp reader)))))
+                    s (let [reader (deps/-url this)]
+                        (fs.readFileSync reader "utf8")))))
 
 (defrecord JavaScriptFile [foreign url source-url provides requires lines source-map]
   deps/IJavaScript
@@ -317,8 +320,8 @@
   (-provides [this] provides)
   (-requires [this] requires)
   (-source [this]
-    (with-open [reader (io/reader url)]
-      (slurp reader)))
+    (let [reader url]
+      (fs.readFileSync reader)))
   ISourceMap
   (-source-url [this] source-url)
   (-source-map [this] source-map))
@@ -335,9 +338,9 @@
     (javascript-file
       (:foreign m)
       (when-let [f (:file m)]
-        (deps/to-url f))
+        f)
       (when-let [sf (:source-file m)]
-        (deps/to-url sf))
+        sf)
       (:provides m)
       (:requires m)
       (:lines m)
@@ -350,7 +353,7 @@
 (defn read-js
   "Read a JavaScript file returning a map of file information."
   [f]
-  (let [source (slurp f)
+  (let [source (fs.readFileSync f)
         m (deps/parse-js-ns (string/split-lines source))]
     (map->javascript-file (assoc m :file f))))
 
@@ -362,9 +365,7 @@
   (-paths [this] "Returns the file paths to the source inputs"))
 
 (extend-protocol Inputs
-  String
-  (-paths [this] [(io/file this)])
-  File
+  string
   (-paths [this] [this]))
 
 (defprotocol Compilable
@@ -412,11 +413,11 @@
   IJavaScript."
   [file {:keys [output-file] :as opts}]
     (if output-file
-      (let [out-file (io/file (util/output-directory opts) output-file)]
+      (let [out-file (path.join (util/output-directory opts) output-file)]
         (compiled-file (comp/compile-file file out-file opts)))
       (let [path (.getPath ^File file)]
         (binding [ana/*cljs-file* path]
-          (with-open [rdr (io/reader file)]
+          (let [rdr file]
             (compile-form-seq (ana/forms-seq* rdr path)))))))
 
 (defn compile-dir
@@ -431,7 +432,7 @@
   "Given the URL of a file within a jar, return the path of the file
   from the root of the jar."
   [url]
-  (last (string/split (.getFile url) #"\.jar!/")))
+  (last (string/split url #"\.jar!/")))
 
 (defn jar-file-to-disk
   "Copy a file contained within a jar to disk. Return the created file."
@@ -440,14 +441,14 @@
       (when env/*compiler*
         (:options @env/*compiler*))))
   ([url out-dir opts]
-   (let [out-file (io/file out-dir (path-from-jarfile url))
-         content  (with-open [reader (io/reader url)]
-                    (slurp reader))]
+   (let [out-file (path.join out-dir (path-from-jarfile url))
+         content  (let [reader url]
+                    (fs.readFileSync reader))]
      (when (and url (or ana/*verbose* (:verbose opts)))
        (util/debug-prn "Copying" (str url) "to" (str out-file)))
      (util/mkdirs out-file)
-     (spit out-file content)
-     (.setLastModified ^File out-file (util/last-modified url))
+     (fs.writeFileSync out-file content)
+     (fs.utimesSync out-file (util/last-modified url) (util/last-modified url))
      out-file)))
 
 ;; TODO: it would be nice if we could consolidate requires-compilation?
@@ -456,9 +457,9 @@
   "Compile a file from a jar if necessary. Returns IJavaScript."
   [jar-file {:keys [output-file] :as opts}]
   (let [out-file (when output-file
-                   (io/file (util/output-directory opts) output-file))]
+                   (path.join (util/output-directory opts) output-file))]
     (if (or (nil? out-file)
-            (not (.exists ^File out-file))
+            (not (fs.existsSync out-file))
             (not= (util/compiled-by-version out-file)
                   (util/clojurescript-version))
             (util/changed? jar-file out-file))
@@ -468,8 +469,8 @@
       ;; have to call compile-file as it includes more IJavaScript
       ;; information than ana/parse-ns
       (compile-file
-        (io/file (util/output-directory opts)
-          (last (string/split (.getPath ^URL jar-file) #"\.jar!/")))
+        (path.join (util/output-directory opts)
+          (last (string/split jar-file #"\.jar!/")))
         opts))))
 
 (defn find-jar-sources
@@ -480,11 +481,11 @@
 
   File
   (-compile [this opts]
-    (if (.isDirectory this)
+    (if (util/directory? this)
       (compile-dir this opts)
       (compile-file this opts)))
   (-find-sources [this _]
-    (if (.isDirectory this)
+    (if (util/directory? this)
       (comp/find-root-sources this)
       [(comp/find-source this)]))
 
@@ -2119,19 +2120,19 @@
     (js-source-file "cljs/externs.js" (io/file "src/main/cljs/cljs/externs.js")))
   )
 
-(defn ^File target-file-for-cljs-ns
+#_(defn ^File target-file-for-cljs-ns
   [ns-sym output-dir]
   (util/to-target-file
     (util/output-directory {:output-dir output-dir})
     {:ns ns-sym}))
 
-(defn mark-cljs-ns-for-recompile!
+#_(defn mark-cljs-ns-for-recompile!
   [ns-sym output-dir]
   (let [s (target-file-for-cljs-ns ns-sym output-dir)]
     (when (.exists s)
       (.setLastModified s 5000))))
 
-(defn cljs-dependents-for-macro-namespaces
+#_(defn cljs-dependents-for-macro-namespaces
   [state namespaces]
   (map :name
     (let [namespaces-set (set namespaces)]
@@ -2139,7 +2140,7 @@
                         (set/intersection namespaces-set (-> x :require-macros vals set))))
         (vals (:cljs.analyzer/namespaces @state))))))
 
-(defn watch
+#_(defn watch
   "Given a source directory, produce runnable JavaScript. Watch the source
    directory for changes rebuilding when necessary. Takes the same arguments as
    cljs.closure/build in addition to some watch-specific options:
@@ -2251,13 +2252,13 @@
 ;; Utilities
 
 ;; for backwards compatibility
-(defn output-directory [opts]
+#_(defn output-directory [opts]
   (util/output-directory opts))
 
-(defn parse-js-ns [f]
+#_(defn parse-js-ns [f]
   (deps/parse-js-ns (line-seq (io/reader f))))
 
-(defn ^File src-file->target-file
+#_(defn ^File src-file->target-file
   ([src]
    (src-file->target-file src
      (when env/*compiler*
@@ -2268,7 +2269,7 @@
         (util/output-directory opts))
       (ana/parse-ns src))))
 
-(defn ^String src-file->goog-require
+#_(defn ^String src-file->goog-require
   ([src] (src-file->goog-require src {:wrap true}))
   ([src {:keys [wrap all-provides macros-ns] :as options}]
     (let [goog-ns
@@ -2290,7 +2291,7 @@
           goog-ns
           (str goog-ns))))))
 
-(defn aot-cache-core []
+#_(defn aot-cache-core []
   (let [base-path (io/file "src" "main" "cljs" "cljs")
         src       (io/file base-path "core.cljs")
         dest      (io/file base-path "core.aot.js")

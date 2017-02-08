@@ -23,3 +23,9 @@
   [& args]
   (binding [*print-fn* *print-err-fn*]
     (apply println args)))
+
+(defn directory? [path]
+  (try
+    (.isDirectory (fs.lstatSync path))
+    (catch :default _
+      false)))
