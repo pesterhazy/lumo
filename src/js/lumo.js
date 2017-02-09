@@ -84,7 +84,7 @@ export function loadUpstreamForeignLibs(): string[] {
   }, []);
 }
 
-export function fileExists(filename: string): boolean {
+export function resource(filename: string): ?Object {
   const len = sourcePaths.length;
   for (let i = 0; i < len; i += 1) {
     const srcPath = sourcePaths[i];
@@ -95,16 +95,23 @@ export function fileExists(filename: string): boolean {
       const file = zip.file(filename);
 
       if (file != null) {
-        return true;
+        return {
+          type: 'jar',
+          jarPath: path.resolve(srcPath),
+          src: filename,
+        };
       }
     }
 
     if (fs.existsSync(path.join(srcPath, filename))) {
-      return true;
+      return {
+        type: 'path',
+        src: path.resolve(srcPath, filename),
+      };
     }
   }
 
-  return false;
+  return null;
 }
 
 // $FlowIssue
@@ -114,4 +121,12 @@ export function addSourcePaths(srcPaths: string[]): void {
 
 export function readSourcePaths(): string[] {
   return [...sourcePaths];
+}
+
+export function readSourceFromJar({ jarPath, src }: {type: string, jarPath: string, src: string}): string {
+  const data = fs.readFileSync(jarPath);
+  const zip = new JSZip().load(data);
+  const source = zip.file(src);
+
+  return source.asText();
 }

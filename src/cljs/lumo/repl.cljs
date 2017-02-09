@@ -151,7 +151,13 @@
         lumo.core
         lumo.repl
         lumo.repl-resources
-        lumo.js-deps} name)))
+        lumo.js-deps
+        lumo.closure
+        lumo.util
+        lumo.analyzer
+        lumo.compiler
+        lumo.io
+        lumo.json} name)))
 
 (defn- skip-load?
   [name macros?]
@@ -405,6 +411,7 @@
   (boolean (re-find could-not-eval-regex msg)))
 
 (defn- handle-repl-error [error]
+  (println (.-stack error))
   (let [message (ex-message error)
         cause (ex-cause error)]
     (cond
@@ -527,7 +534,7 @@
               path
               (str (root-directory @current-ns) \/ path))
         src (.substring src 1)]
-    (or (and (js/LUMO_EXISTS (str src ".cljs")) (str src ".cljs"))
+    (or (and (js/LUMO_RESOURCE (str src ".cljs")) (str src ".cljs"))
         (str src ".cljc"))))
 
 (defn- wrap-special-fns

@@ -11,6 +11,8 @@ import type { CLIOptsType } from './cli';
 let newContext;
 let ClojureScriptContext;
 
+var gclosure = require("google-closure-compiler-js");
+
 function lumoEval(source: string): mixed {
   if (__DEV__) {
     // $FlowFixMe: this type differs according to the env
@@ -37,9 +39,11 @@ if (__DEV__) {
       LUMO_READ_SOURCE: lumo.readSource,
       LUMO_WRITE_CACHE: lumo.writeCache,
       LUMO_LOAD_UPS_DEPS_CLJS: lumo.loadUpstreamForeignLibs,
-      LUMO_EXISTS: lumo.fileExists,
+      LUMO_RESOURCE: lumo.resource,
+      LUMO_READ_SOURCE_JAR: lumo.readSourceFromJar,
       LUMO_EVAL: lumoEval,
-      LUMO_READ_SOURCE_PATHS: readSourcePaths,
+      LUMO_READ_SOURCE_PATHS: lumo.readSourcePaths,
+      LUMO_CC: gclosure,
       global: undefined,
     };
 
@@ -57,9 +61,11 @@ if (__DEV__) {
     global.LUMO_READ_SOURCE = lumo.readSource;
     global.LUMO_WRITE_CACHE = lumo.writeCache;
     global.LUMO_LOAD_UPS_DEPS_CLJS = lumo.loadUpstreamForeignLibs;
-    global.LUMO_EXISTS = lumo.fileExists;
+    global.LUMO_RESOURCE = lumo.resource;
     global.LUMO_EVAL = lumoEval;
-    global.LUMO_READ_SOURCE_PATHS = readSourcePaths;
+    global.LUMO_READ_SOURCE_PATHS = lumo.readSourcePaths;
+    global.LUMO_CC = gclosure;
+    global.LUMO_READ_SOURCE_JAR = lumo.readSourceFromJar;
 
     // $FlowExpectedError: only exists in the custom V8 startup snapshot
     initialize(); // eslint-disable-line no-undef

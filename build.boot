@@ -116,7 +116,7 @@
       :move {#"^main.out[\\\/]((cljs|clojure|cognitect|lumo|lazy_map).*)" "$1"})
     (sift :include #{#"^main.js" #"^bundle.js" #"^cljs(?!\.js)"
                      #"^clojure" #"^cognitect" #"^lumo[\\\/]" #"^lazy_map[\\\/]"}
-      :to-resource #{#"^lumo[\\\/]repl\.clj$"})
+      :to-resource #{#"^lumo[\\\/](repl|util)\.clj$"})
     (sift :include #{#"^cljs[\\\/]core\.cljs\.cache\.json$"} :invert true)))
 
 (deftask compile-cljs []

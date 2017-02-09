@@ -1,8 +1,10 @@
 (ns lumo.util
   (:require-macros lumo.util)
   (:require [clojure.string :as string]
-            [cljs.compiler :as comp]))
+            [cljs.compiler :as comp]
+            [cljs.reader :as edn]))
 
+(def fs (js/require "fs"))
 (def node-path (js/require "path"))
 (def crypto (js/require "crypto"))
 
@@ -136,3 +138,51 @@
   (let [digest (crypto.createHash "sha1")]
     (.update digest s)
     (.toUppserCase (.digest digest "hex"))))
+
+(defn line-seq [path]
+  (string/split (fs.readFileSync path) #"\n"))
+
+(defn build-options [f]
+  (let [reader f]
+    (let [match (->> reader line-seq first
+                  (re-matches #".*ClojureScript \d+\.\d+\.\d+ (.*)$"))]
+      (and match (edn/read-string (second match))))))
+
+(defn map-merge [a b]
+  (if (and (map? a) (map? b))
+    (loop [ks (seq (keys a)) ret a b' b]
+      (if ks
+        (let [k (first ks)]
+          (if (contains? b' k)
+            (recur
+              (next ks)
+              (assoc ret k (map-merge (get ret k) (get b' k)))
+              (dissoc b' k))
+            (recur (next ks) ret b')))
+        (merge ret b')))
+    a))
+
+(defn file-seq [dir]
+  (tree-seq
+    (fn [f] (.isDirectory (.statSync fs f) ()))
+    (fn [d] (map #(.join node-path d %) (.readdirSync fs d)))
+    dir))
+
+
+(defn to-target-file
+  ([target-dir ns-info]
+   (to-target-file target-dir ns-info "js"))
+  ([target-dir {:keys [ns source-file] :as ns-info} ext]
+   (let [src-ext (if source-file
+                   (lumo.util/ext source-file)
+                   "cljs")
+         ns      (if (or (= src-ext "clj")
+                       (and (= ns 'cljs.core) (= src-ext "cljc")))
+                   (symbol (str ns "$macros"))
+                   ns)
+         relpath (string/split (munge-path (str ns)) #"\.")
+         parents (cond-> (butlast relpath)
+                   target-dir (conj target-dir))]
+     (cond->> (node-path.join (str (last relpath) (str "." ext)))
+       (seq parents)
+       (to-path parents)))))

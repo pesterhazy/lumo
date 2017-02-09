@@ -2,7 +2,8 @@
   (:require [cljs.tools.reader :as r]
             [clojure.string :as string]
             [goog.string]
-            [lumo.util :as util])
+            [lumo.util :as util :refer [file-seq]]
+            [lumo.io :as io :refer [slurp]])
   (:import [goog.string format]))
 
 (defonce ^:private foreign-libs-index (volatile! {}))
@@ -82,10 +83,11 @@ If no ClassLoader is provided, RT/baseLoader is assumed."
 (defn find-js-jar
   "Returns a seq of URLs of all JavaScript resources in the given jar"
   [jar-path lib-path]
-  (filter #(and
-             (.endsWith % ".js")
-             (.startsWith % lib-path))
-    (jar-entry-names jar-path)))
+  (map io/resource
+    (filter #(and
+               (.endsWith ^String % ".js")
+               (.startsWith ^String % lib-path))
+      (jar-entry-names jar-path))))
 
 ;; (defmulti to-url class)
 
@@ -94,12 +96,6 @@ If no ClassLoader is provided, RT/baseLoader is assumed."
 ;; (defmethod to-url URL [^URL url] url)
 
 ;; (defmethod to-url String [s] (to-url (io/file s)))
-
-(defn file-seq [dir]
-  (tree-seq
-    (fn [f] (.isDirectory (.statSync fs f) ()))
-    (fn [d] (map #(.join path d %) (.readdirSync fs d)))
-    dir))
 
 (defn find-js-fs
   "Finds js resources from a path on the filesystem"
@@ -254,7 +250,7 @@ case."
   ;; TODO: this might cause weirdnesses on classpath vs non-classpath. Maybe the
   ;; solution is to create a wrapper that we call to represent paths that distinguish
   ;; between inside classpath vs out
-  (or (and (js/LUMO_EXISTS path-or-url) path-or-url)
+  (or (io/resource path-or-url)
       (and (.existsSync path-or-url) (path.resolve path-or-url))))
 
 (defn load-foreign-library*
@@ -263,7 +259,7 @@ case."
   and :url"
   ([lib-spec] (load-foreign-library* lib-spec false))
   ([lib-spec cp-only?]
-    (let [find-func (if cp-only? #(and (js/LUMO_EXISTS %) %) find-url)]
+    (let [find-func (if cp-only? io/resource find-url)]
       (cond->
         (merge lib-spec
           {:foreign true
@@ -276,7 +272,7 @@ case."
 ;; TODO: probably need to use LUMO_READ_SOURCE to guarantee this finds stuff in
 ;; the classpath
 (defn line-seq [path]
-  (string/split (fs.readFileSync path) #"\n"))
+  (string/split (slurp path) #"\n"))
 
 (defn- library-graph-node
   "Returns a map of :provides, :requires, and :url given a URL to a goog-style
@@ -341,7 +337,7 @@ JavaScript library containing provide/require 'declarations'."
                             (-> (.substring s 1 (dec (count s)))
                                 (string/split #"'\s*,\s*'"))))]
     ;; TODO: make sure we find this, because it's in the classpath
-    (let [reader "goog/deps.js"]
+    (let [reader (io/resource "goog/deps.js")]
       (->> (line-seq reader)
            (map #(re-matches #"^goog\.addDependency\(['\"](.*)['\"],\s*\[(.*)\],\s*\[(.*)\],.*\);.*" %))
            (remove nil?)
@@ -378,7 +374,8 @@ JavaScript library containing provide/require 'declarations'."
   (when-let [lib-resource (some-> (name lib)
                             (.replace \. \/)
                             (.replace \- \_)
-                            (str ".js"))]
+                            (str ".js")
+                            io/resource)]
     (let [{:keys [provides] :as lib-info} (library-graph-node lib-resource)]
       (if (some #{(name lib)} provides)
         (assoc lib-info :closure-lib true)
