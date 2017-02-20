@@ -129,7 +129,8 @@
       :move {#"^main.out[\\\/]((cljs|clojure|cognitect|lumo|lazy_map).*)" "$1"})
     (sift :include #{#"^main.js" #"^bundle.js" #"^cljs(?!\.js)" #"core\$macros"
                      #"^clojure" #"^cognitect" #"^goog" #"^lumo[\\\/]" #"^lazy_map[\\\/]"}
-      :to-resource #{#"^lumo[\\\/](repl|util)\.clj$"})
+      :to-resource #{#"^lumo[\\\/]repl\.clj$"
+                     #"^lumo[\\\/]util\.clj$"})
     (sift :include #{#"^cljs[\\\/]core\.cljs\.cache\.json$"
                      #"^cljs[\\\/](analyzer[\\\/]utils|build|closure)"
                      #"^cljs[\\\/](core[\\\/]macros|compiler[\\\/]api|repl([\\\/].*|(.cljc))|source_map.*clj$)"
