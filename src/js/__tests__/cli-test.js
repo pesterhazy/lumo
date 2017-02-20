@@ -15,7 +15,7 @@ jest.mock('../socketRepl');
 jest.mock('../version', () => 'X.X.X');
 jest.mock('../lumo', () => ({
   addSourcePaths: jest.fn((srcPaths: string[]) => undefined),
-  load: jest.fn((path: string) => path),
+  load: jest.fn((x: string) => x),
 }));
 
 const originalArgv = process.argv;
