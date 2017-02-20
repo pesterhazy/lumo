@@ -1,51 +1,12 @@
-(ns lumo.js-deps
-  (:require [cljs.tools.reader :as r]
+(ns lumo.cljs-deps
+  (:require [goog.string]
             [clojure.string :as string]
-            [goog.string]
+            [goog.object :as gobj]
             [lumo.util :as util :refer [file-seq]]
             [lumo.io :as io :refer [slurp]])
   (:import [goog.string format]))
 
-(defonce ^:private foreign-libs-index (volatile! {}))
-
-(defn foreign-lib? [dep]
-  (contains? @foreign-libs-index dep))
-
-(defn- add-foreign-lib
-  [index {:keys [provides] :as foreign-lib}]
-  (reduce (fn [index lib]
-            (assoc index (symbol lib) foreign-lib))
-    index provides))
-
-(defn- index-foreign-libs
-  [index libs]
-  (reduce (fn [index lib]
-            (add-foreign-lib index lib))
-    index libs))
-
-(defn index-upstream-foreign-libs []
-  (doseq [deps-cljs-str (js/LUMO_LOAD_UPS_DEPS_CLJS)]
-    (let [{:keys [foreign-libs]} (r/read-string deps-cljs-str)]
-      (vswap! foreign-libs-index index-foreign-libs foreign-libs))))
-
-(defn topo-sort
-  [index dep]
-  (loop [ret '()
-         s  #{dep}]
-    (if (empty? s)
-      (distinct ret)
-      (let [dep (first s)
-            requires (map symbol (:requires (get index dep)))]
-        (recur (conj ret dep) (into (set (rest s)) requires))))))
-
-(defn files-to-load [dep]
-  (let [index @foreign-libs-index]
-    (map (comp :file index) (topo-sort index dep))))
-
-
 ;; =====================
-
-
 
 ; taken from pomegranate/dynapath
 ; https://github.com/tobias/dynapath/blob/master/src/dynapath/util.clj
@@ -61,12 +22,8 @@ If no ClassLoader is provided, RT/baseLoader is assumed."
        (mapcat #(.getURLs ^URLClassLoader %))
        distinct)))
 
-(def fs (js/require "fs"))
-(def path (js/require "path"))
-(def JSZip (js/require "jszip"))
-
 (defn zip-file [jar-path]
-  (.load (JSZip.) (.readFileSync fs jar-path))
+  (.load (new (js/$$LUMO_GLOBALS.getJSZip)) (js/$$LUMO_GLOBALS.fs.readFileSync jar-path))
   #_(cond
     (instance? File jar-path) (ZipFile. ^File jar-path)
     (string? jar-path) (ZipFile. ^String jar-path)
@@ -76,18 +33,20 @@ If no ClassLoader is provided, RT/baseLoader is assumed."
 
 (defn jar-entry-names* [jar-path]
   (let [z (zip-file jar-path)]
-    (doall (filter #(.-dir %) (.-files z)))))
+    (doall (map #(.-name %) (gobj/getValues (.-files z))))))
 
 (def jar-entry-names (memoize jar-entry-names*))
 
 (defn find-js-jar
   "Returns a seq of URLs of all JavaScript resources in the given jar"
   [jar-path lib-path]
-  (map io/resource
-    (filter #(and
-               (.endsWith ^String % ".js")
-               (.startsWith ^String % lib-path))
-      (jar-entry-names jar-path))))
+  (into [] (comp
+             ;(map #(.-name %))
+             (filter #(and
+                        (.endsWith % ".js")
+                        (.startsWith % lib-path)))
+             (map io/resource))
+    (jar-entry-names jar-path)))
 
 ;; (defmulti to-url class)
 
@@ -100,27 +59,20 @@ If no ClassLoader is provided, RT/baseLoader is assumed."
 (defn find-js-fs
   "Finds js resources from a path on the filesystem"
   [path]
-  (let [file path]
-    (when (fs.existsSync file)
-      (filter #(.endsWith % ".js") (file-seq path)))))
+  (when (js/$$LUMO_GLOBALS.fs.existsSync path)
+    (filter #(.endsWith % ".js") (file-seq path))))
 
 (defn find-js-classpath
   "Returns a seq of URLs of all JavaScript files on the classpath."
   [path]
-  (->> (js/LUMO_READ_SOURCE_PATHS)
+  (->> (js/$$LUMO_GLOBALS.readSourcePaths)
     (reduce
       (fn [files jar-or-dir]
         (let [name (.toLowerCase jar-or-dir)
               ext  (.substring name (inc (.lastIndexOf name ".")))]
-          (->> (when (fs.existsSync jar-or-dir)
-                 (cond
-                   (util/directory? jar-or-dir)
-                   (find-js-fs (str (path.resolve jar-or-dir) "/" path))
-
-                   (#{"jar" "zip"} ext)
-                   (find-js-jar jar-or-dir path)
-
-                   :else nil))
+          (->> (if (#{"jar" "zip"} ext)
+                 (find-js-jar jar-or-dir path)
+                 (find-js-fs (str (js/$$LUMO_GLOBALS.path.resolve jar-or-dir) "/" path)))
             (remove nil?)
             (into files))))
       [])))
@@ -130,7 +82,7 @@ If no ClassLoader is provided, RT/baseLoader is assumed."
 a given (directory) path on the filesystem. [path] only applies to the latter
 case."
   (let [file path]
-    (if (fs.existsSync file)
+    (if (js/$$LUMO_GLOBALS.fs.existsSync file)
       (find-js-fs path)
       (find-js-classpath path))))
 
@@ -251,7 +203,7 @@ case."
   ;; solution is to create a wrapper that we call to represent paths that distinguish
   ;; between inside classpath vs out
   (or (io/resource path-or-url)
-      (and (.existsSync path-or-url) (path.resolve path-or-url))))
+      (and (.existsSync path-or-url) (js/$$LUMO_GLOBALS.path.resolve path-or-url))))
 
 (defn load-foreign-library*
   "Given a library spec (a map containing the keys :file
@@ -303,7 +255,7 @@ JavaScript library containing provide/require 'declarations'."
     (mapcat load-library ups-libs) ;upstream deps
     ; :libs are constrained to filesystem-only at this point; see
     ; `find-classpath-lib` for goog-style JS library lookup
-    (mapcat load-library (filter #(fs.existsSync %) libs))
+    (mapcat load-library (filter #(js/$$LUMO_GLOBALS.fs.existsSync %) libs))
     (map #(load-foreign-library % true) ups-flibs) ;upstream deps
     (map load-foreign-library foreign-libs)))
 
@@ -371,16 +323,18 @@ JavaScript library containing provide/require 'declarations'."
   _must_ contain a `goog.provide` that matches [lib], or this fn will return nil
   and print a warning."
   [lib]
-  (when-let [lib-resource (some-> (name lib)
-                            (.replace \. \/)
-                            (.replace \- \_)
-                            (str ".js")
-                            io/resource)]
+  (when-let [lib-resource (and
+                            (not (.startsWith (name lib) "cljs."))
+                            (some-> (name lib)
+                              (.replace \. \/)
+                              (.replace \- \_)
+                              (str ".js")
+                              io/resource))]
     (let [{:keys [provides] :as lib-info} (library-graph-node lib-resource)]
       (if (some #{(name lib)} provides)
         (assoc lib-info :closure-lib true)
-        (js/console.error ;println
+        (js/console.error
           (format
             (str "WARNING: JavaScript file found on classpath for library `%s`, "
-              "but does not contain a corresponding `goog.provide` declaration: %s")
-            lib lib-resource))))))
+              "but does not contain a corresponding `goog.provide` declaration:")
+            lib) lib-resource)))))

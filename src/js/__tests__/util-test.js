@@ -2,18 +2,22 @@
 
 import fs from 'fs';
 import os from 'os';
+import path from 'path';
 import { ensureDir, srcPathsFromClasspathStrings,
          isWhitespace, isWindows } from '../util';
 
 describe('srcPathsFromClasspathStrings', () => {
   const homedir = os.homedir;
+  const pathResolve = path.resolve;
 
   beforeEach(() => {
     os.homedir = jest.fn(() => '/Users/foo');
+    path.resolve = jest.fn((x: string) => x);
   });
 
   afterEach(() => {
     os.homedir = homedir;
+    path.resolve = pathResolve;
   });
 
   if (isWindows) {

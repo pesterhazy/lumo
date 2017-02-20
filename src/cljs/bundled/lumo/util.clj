@@ -8,6 +8,6 @@
     `(if ~enable
        (let [start# (cljs.core/system-time)
              ret# ~expr]
-         (debug-prn (str ~msg ", elapsed time:") (/ (double (- (cljs.core/system-time) start#)) 1000000.0) "msecs")
+         (debug-prn (str ~msg ", elapsed time:") (- (cljs.core/system-time) start#) "msecs")
          ret#)
        ~expr)))

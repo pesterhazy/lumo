@@ -1,5 +1,6 @@
 /* @flow */
 
+import path from 'path';
 // $FlowIssue: this module exists.
 import v8 from 'v8';
 import startCLI from '../cli';
@@ -20,15 +21,18 @@ jest.mock('../lumo', () => ({
 const originalArgv = process.argv;
 const originalStdoutWrite = process.stdout.write;
 const originalStderrWrite = process.stderr.write;
+const pathResolve = path.resolve;
 
 beforeEach(() => {
   process.stdout.write = jest.fn();
   process.stderr.write = jest.fn();
+  path.resolve = jest.fn((x: string) => x);
 });
 
 afterEach(() => {
   process.stdout.write = originalStdoutWrite;
   process.stderr.write = originalStderrWrite;
+  path.resolve = pathResolve;
 });
 
 afterEach(() => {

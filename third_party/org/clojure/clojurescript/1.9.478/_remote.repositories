@@ -1,0 +1,5 @@
+#NOTE: This is an Aether internal implementation file, its format can be changed without prior notice.
+#Sat Feb 18 19:58:10 PST 2017
+clojurescript-1.9.478.jar>=
+clojurescript-1.9.478-aot.jar>=
+clojurescript-1.9.478.pom>=
